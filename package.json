@@ -11,6 +11,7 @@
     "Other"
   ],
   "activationEvents": [
+    "workspaceContains:**/.git/info/exclude",
     "onCommand:git-ignore-manager.addToGitignore",
     "onCommand:git-ignore-manager.addToExclude",
     "onCommand:git-ignore-manager.openGitignore",

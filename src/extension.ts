@@ -1,7 +1,10 @@
 import * as vscode from 'vscode';
+import { registerExcludeWatcher } from './excludeWatcher';
 import { addResourceToIgnore, openIgnoreFile } from './gitIgnoreManager';
 
 export function activate(context: vscode.ExtensionContext) {
+	registerExcludeWatcher(context);
+
 	context.subscriptions.push(
 		vscode.commands.registerCommand('git-ignore-manager.addToGitignore', async (resource?: vscode.Uri) => {
 			await addResourceToIgnore(resource, 'gitignore');
