@@ -1,5 +1,6 @@
 import * as assert from 'assert';
 import * as path from 'node:path';
+import { createTrackedWarningMessage } from '../gitIgnoreManager';
 import { createIgnorePattern, normalizePathSeparators } from '../pathUtils';
 
 suite('Path utilities', () => {
@@ -19,5 +20,21 @@ suite('Path utilities', () => {
 
 	test('normalizes Windows separators', () => {
 		assert.strictEqual(normalizePathSeparators('src\\config\\local.json'), 'src/config/local.json');
+	});
+});
+
+suite('Tracked warnings', () => {
+	test('describes tracked files', () => {
+		assert.strictEqual(
+			createTrackedWarningMessage('src/config.local.json', false),
+			'"src/config.local.json" is already tracked by Git. Ignoring it will not stop Git from tracking changes.',
+		);
+	});
+
+	test('describes tracked folder contents', () => {
+		assert.strictEqual(
+			createTrackedWarningMessage('tmp/cache/', true),
+			'"tmp/cache/" contains files already tracked by Git. Ignoring this folder will not stop Git from tracking those files.',
+		);
 	});
 });

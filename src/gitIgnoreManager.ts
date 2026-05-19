@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { findGitRoot, isTrackedByGit } from './git';
+import { findGitRoot, hasTrackedFilesInDirectory, isTrackedByGit } from './git';
 import { appendPatternIfMissing, ensureTextFile } from './ignoreFile';
 import { createIgnorePattern } from './pathUtils';
 
@@ -24,11 +24,12 @@ export async function addResourceToIgnore(resource: vscode.Uri | undefined, targ
 	}
 
 	const stat = await vscode.workspace.fs.stat(selectedResource);
-	const pattern = createIgnorePattern(repoRoot, selectedResource.fsPath, stat.type === vscode.FileType.Directory);
+	const isDirectory = stat.type === vscode.FileType.Directory;
+	const pattern = createIgnorePattern(repoRoot, selectedResource.fsPath, isDirectory);
 
-	if (await isTrackedByGit(repoRoot, pattern)) {
+	if (await hasTrackedContent(repoRoot, pattern, isDirectory)) {
 		const choice = await vscode.window.showWarningMessage(
-			`"${pattern}" is already tracked by Git. Ignoring it will not stop Git from tracking changes.`,
+			createTrackedWarningMessage(pattern, isDirectory),
 			'Add Anyway',
 			'Cancel',
 		);
@@ -46,6 +47,14 @@ export async function addResourceToIgnore(resource: vscode.Uri | undefined, targ
 	} else {
 		vscode.window.showInformationMessage(`"${pattern}" already exists in ${targetLabels[target]}.`);
 	}
+}
+
+export function createTrackedWarningMessage(pattern: string, isDirectory: boolean): string {
+	if (isDirectory) {
+		return `"${pattern}" contains files already tracked by Git. Ignoring this folder will not stop Git from tracking those files.`;
+	}
+
+	return `"${pattern}" is already tracked by Git. Ignoring it will not stop Git from tracking changes.`;
 }
 
 export async function openIgnoreFile(resource: vscode.Uri | undefined, target: IgnoreTarget): Promise<void> {
@@ -108,6 +117,14 @@ async function resolveGitRoot(resource: vscode.Uri): Promise<string | undefined>
 		vscode.window.showErrorMessage('Selected resource is not inside a Git repository.');
 		return undefined;
 	}
+}
+
+async function hasTrackedContent(repoRoot: string, pattern: string, isDirectory: boolean): Promise<boolean> {
+	if (isDirectory) {
+		return hasTrackedFilesInDirectory(repoRoot, pattern);
+	}
+
+	return isTrackedByGit(repoRoot, pattern);
 }
 
 function getIgnoreFileUri(repoRoot: string, target: IgnoreTarget): vscode.Uri {

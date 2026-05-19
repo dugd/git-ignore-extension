@@ -16,3 +16,8 @@ export async function isTrackedByGit(repoRoot: string, repoRelativePath: string)
 		return false;
 	}
 }
+
+export async function hasTrackedFilesInDirectory(repoRoot: string, repoRelativeDirectory: string): Promise<boolean> {
+	const { stdout } = await execFileAsync('git', ['-C', repoRoot, 'ls-files', '--', repoRelativeDirectory]);
+	return stdout.trim().length > 0;
+}
