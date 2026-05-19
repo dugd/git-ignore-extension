@@ -1,0 +1,88 @@
+{
+  "name": "git-ignore-manager",
+  "displayName": "Git Ignore Manager",
+  "description": "Improved management of .gitignore, .git/info/exclude, and global Git ignore rules.",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.120.0"
+  },
+  "categories": [
+    "Source Control",
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:git-ignore-manager.addToGitignore",
+    "onCommand:git-ignore-manager.addToExclude",
+    "onCommand:git-ignore-manager.openGitignore",
+    "onCommand:git-ignore-manager.openExclude"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "git-ignore-manager.addToGitignore",
+        "title": "Add to .gitignore",
+        "category": "Git Ignore Manager"
+      },
+      {
+        "command": "git-ignore-manager.addToExclude",
+        "title": "Add to .git/info/exclude",
+        "category": "Git Ignore Manager"
+      },
+      {
+        "command": "git-ignore-manager.openGitignore",
+        "title": "Open .gitignore",
+        "category": "Git Ignore Manager"
+      },
+      {
+        "command": "git-ignore-manager.openExclude",
+        "title": "Open .git/info/exclude",
+        "category": "Git Ignore Manager"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "git-ignore-manager.addToGitignore",
+          "group": "git-ignore-manager@1"
+        },
+        {
+          "command": "git-ignore-manager.addToExclude",
+          "group": "git-ignore-manager@2"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "git-ignore-manager.addToGitignore"
+        },
+        {
+          "command": "git-ignore-manager.addToExclude"
+        },
+        {
+          "command": "git-ignore-manager.openGitignore"
+        },
+        {
+          "command": "git-ignore-manager.openExclude"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "pnpm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "pnpm run compile && pnpm run lint",
+    "lint": "eslint src",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.120.0",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "22.x",
+    "typescript-eslint": "^8.56.1",
+    "eslint": "^9.39.3",
+    "typescript": "^5.9.3",
+    "@vscode/test-cli": "^0.0.12",
+    "@vscode/test-electron": "^2.5.2"
+  }
+}
