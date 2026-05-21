@@ -18,6 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Added basic multi-root workspace handling.
 - Added a `.git/info/exclude` file watcher that refreshes VS Code Git and Explorer state when local exclude rules change.
 - Added batch ignore support for multiple selected Explorer resources.
+- Added a logger adapter backed by a VS Code output channel for command and watcher diagnostics.
 
 ### Changed
 

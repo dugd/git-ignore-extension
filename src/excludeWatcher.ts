@@ -1,11 +1,12 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { findGitRoot } from './git';
+import type { Logger } from './logger';
 
 const refreshDelayMs = 150;
 
-export function registerExcludeWatcher(context: vscode.ExtensionContext): void {
-	const registry = new ExcludeWatcherRegistry();
+export function registerExcludeWatcher(context: vscode.ExtensionContext, logger: Logger): void {
+	const registry = new ExcludeWatcherRegistry(logger);
 
 	context.subscriptions.push(
 		registry,
@@ -22,11 +23,13 @@ class ExcludeWatcherRegistry implements vscode.Disposable {
 	private refreshTimer: NodeJS.Timeout | undefined;
 	private resetGeneration = 0;
 
+	constructor(private readonly logger: Logger) {}
+
 	async reset(): Promise<void> {
 		const generation = ++this.resetGeneration;
 		this.clearWatchers();
 
-		const repoRoots = await resolveWorkspaceRepoRoots();
+		const repoRoots = await resolveWorkspaceRepoRoots(this.logger);
 		if (generation !== this.resetGeneration) {
 			return;
 		}
@@ -55,8 +58,11 @@ class ExcludeWatcherRegistry implements vscode.Disposable {
 		const gitInfoUri = vscode.Uri.file(path.join(repoRoot, '.git', 'info'));
 		const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(gitInfoUri, 'exclude'));
 		const refresh = () => {
+			this.logger.info(`Local exclude changed: ${path.join(repoRoot, '.git', 'info', 'exclude')}`);
 			this.scheduleRefresh();
 		};
+
+		this.logger.info(`Watching local exclude: ${path.join(repoRoot, '.git', 'info', 'exclude')}`);
 
 		this.disposables.push(
 			watcher,
@@ -73,38 +79,44 @@ class ExcludeWatcherRegistry implements vscode.Disposable {
 
 		this.refreshTimer = setTimeout(() => {
 			this.refreshTimer = undefined;
-			void refreshVsCodeGitState();
+			void refreshVsCodeGitState(this.logger);
 		}, refreshDelayMs);
 	}
 }
 
-async function resolveWorkspaceRepoRoots(): Promise<string[]> {
+async function resolveWorkspaceRepoRoots(logger: Logger): Promise<string[]> {
 	const workspaceFolders = vscode.workspace.workspaceFolders ?? [];
 	const repoRoots = new Set<string>();
 
 	await Promise.all(workspaceFolders.map(async (folder) => {
 		try {
-			repoRoots.add(await findGitRoot(folder.uri.fsPath));
+			const repoRoot = await findGitRoot(folder.uri.fsPath);
+			logger.info(`Resolved watcher Git root for ${folder.uri.fsPath} -> ${repoRoot}`);
+			repoRoots.add(repoRoot);
 		} catch {
-			// Non-Git workspace folders are valid; they simply have no local exclude file to watch.
+			logger.info(`Skipped local exclude watcher for non-Git workspace folder: ${folder.uri.fsPath}`);
 		}
 	}));
 
 	return Array.from(repoRoots);
 }
 
-async function refreshVsCodeGitState(): Promise<void> {
+async function refreshVsCodeGitState(logger: Logger): Promise<void> {
+	logger.info('Refresh requested: git.refresh, workbench.files.action.refreshFilesExplorer');
 	await Promise.all([
-		executeCommandIfAvailable('git.refresh'),
-		executeCommandIfAvailable('workbench.files.action.refreshFilesExplorer'),
+		executeCommandIfAvailable('git.refresh', logger),
+		executeCommandIfAvailable('workbench.files.action.refreshFilesExplorer', logger),
 	]);
 }
 
-async function executeCommandIfAvailable(command: string): Promise<void> {
+async function executeCommandIfAvailable(command: string, logger: Logger): Promise<void> {
 	try {
 		await vscode.commands.executeCommand(command);
-	} catch {
-		// These commands are best-effort refresh hooks. The watcher itself must keep working if
-		// the built-in Git or Explorer command is unavailable in a specific VS Code environment.
+	} catch (error) {
+		logger.warn(`Refresh command failed: ${command}: ${getErrorMessage(error)}`);
 	}
+}
+
+function getErrorMessage(error: unknown): string {
+	return error instanceof Error ? error.message : String(error);
 }

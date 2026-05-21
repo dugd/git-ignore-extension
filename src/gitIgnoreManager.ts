@@ -2,6 +2,8 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { findGitRoot, hasTrackedFilesInDirectory, isTrackedByGit } from './git';
 import { appendPatternsIfMissing, ensureTextFile } from './ignoreFile';
+import type { Logger } from './logger';
+import { noopLogger } from './logger';
 import { createIgnorePattern, getGitRootSearchPath } from './pathUtils';
 
 type IgnoreTarget = 'gitignore' | 'exclude';
@@ -34,33 +36,39 @@ export async function addResourceToIgnore(
 	resource: vscode.Uri | undefined,
 	selectedResources: readonly vscode.Uri[] | undefined,
 	target: IgnoreTarget,
+	logger: Logger = noopLogger,
 ): Promise<void> {
 	const resources = await resolveSelectedResources(resource, selectedResources);
+	logger.info(`Add to ${targetLabels[target]} started: ${resources.length} resource(s)`);
+
 	if (resources.length === 0) {
+		logger.warn('Add command failed: no selected resource');
 		vscode.window.showErrorMessage('Select a file or folder to ignore.');
 		return;
 	}
 
 	if (resources.length === 1) {
-		await addSingleResourceToIgnore(resources[0], target);
+		await addSingleResourceToIgnore(resources[0], target, logger);
 		return;
 	}
 
-	await addBatchResourcesToIgnore(resources, target);
+	await addBatchResourcesToIgnore(resources, target, logger);
 }
 
-async function addSingleResourceToIgnore(resource: vscode.Uri, target: IgnoreTarget): Promise<void> {
-	const candidate = await createIgnoreCandidate(resource, true);
+async function addSingleResourceToIgnore(resource: vscode.Uri, target: IgnoreTarget, logger: Logger): Promise<void> {
+	const candidate = await createIgnoreCandidate(resource, true, logger);
 	if (!candidate) {
 		return;
 	}
 
 	if (await hasTrackedContent(candidate.repoRoot, candidate.pattern, candidate.isDirectory)) {
+		logger.warn(`Resource is tracked or contains tracked files: ${candidate.pattern}`);
 		const choice = await vscode.window.showWarningMessage(
 			createTrackedWarningMessage(candidate.pattern, candidate.isDirectory),
 			'Add Anyway',
 			'Cancel',
 		);
+		logger.info(`Tracked warning decision: ${choice ?? 'dismissed'}`);
 
 		if (choice !== 'Add Anyway') {
 			return;
@@ -68,50 +76,54 @@ async function addSingleResourceToIgnore(resource: vscode.Uri, target: IgnoreTar
 	}
 
 	const ignoreFile = getIgnoreFileUri(candidate.repoRoot, target);
+	logger.info(`Target ignore file: ${ignoreFile.fsPath}`);
 	const result = await appendPatternsIfMissing(ignoreFile, [candidate.pattern]);
 
 	if (result.added > 0) {
+		logger.info(`Pattern added: ${candidate.pattern}`);
 		vscode.window.showInformationMessage(`Added "${candidate.pattern}" to ${targetLabels[target]}.`);
 	} else {
+		logger.info(`Pattern already exists: ${candidate.pattern}`);
 		vscode.window.showInformationMessage(`"${candidate.pattern}" already exists in ${targetLabels[target]}.`);
 	}
 }
 
-async function addBatchResourcesToIgnore(resources: readonly vscode.Uri[], target: IgnoreTarget): Promise<void> {
+async function addBatchResourcesToIgnore(resources: readonly vscode.Uri[], target: IgnoreTarget, logger: Logger): Promise<void> {
 	const candidates: IgnoreCandidate[] = [];
 	let failed = 0;
 
 	for (const selectedResource of resources) {
-		const candidate = await createIgnoreCandidate(selectedResource, false);
+		const candidate = await createIgnoreCandidate(selectedResource, false, logger);
 		if (candidate) {
 			candidates.push(candidate);
 		} else {
+			logger.warn(`Failed to process selected resource: ${selectedResource.fsPath}`);
 			failed++;
 		}
 	}
 
 	if (candidates.length === 0) {
-		showAddSummary({ added: 0, existing: 0, skippedTracked: 0, failed, targetCount: resources.length }, target);
+		showAddSummary({ added: 0, existing: 0, skippedTracked: 0, failed, targetCount: resources.length }, target, logger);
 		return;
 	}
 
 	const trackedCandidates = await findTrackedCandidates(candidates);
-	const filterResult = await filterTrackedCandidates(candidates, trackedCandidates);
+	const filterResult = await filterTrackedCandidates(candidates, trackedCandidates, logger);
 	if (!filterResult) {
 		return;
 	}
 
-	const summary = await appendCandidates(filterResult.candidates, target);
+	const summary = await appendCandidates(filterResult.candidates, target, logger);
 	showAddSummary({
 		...summary,
 		skippedTracked: filterResult.skippedTracked,
 		failed,
 		targetCount: resources.length,
-	}, target);
+	}, target, logger);
 }
 
-async function createIgnoreCandidate(resource: vscode.Uri, showError: boolean): Promise<IgnoreCandidate | undefined> {
-	const repoRoot = await resolveGitRoot(resource, showError);
+async function createIgnoreCandidate(resource: vscode.Uri, showError: boolean, logger: Logger): Promise<IgnoreCandidate | undefined> {
+	const repoRoot = await resolveGitRoot(resource, showError, logger);
 	if (!repoRoot) {
 		return undefined;
 	}
@@ -120,9 +132,11 @@ async function createIgnoreCandidate(resource: vscode.Uri, showError: boolean): 
 		const stat = await vscode.workspace.fs.stat(resource);
 		const isDirectory = stat.type === vscode.FileType.Directory;
 		const pattern = createIgnorePattern(repoRoot, resource.fsPath, isDirectory);
+		logger.info(`Generated pattern: ${pattern}`);
 
 		return { repoRoot, pattern, isDirectory };
-	} catch {
+	} catch (error) {
+		logger.error(`Failed to read selected resource ${resource.fsPath}: ${getErrorMessage(error)}`);
 		if (showError) {
 			vscode.window.showErrorMessage('Selected resource does not exist or cannot be read.');
 		}
@@ -173,20 +187,22 @@ export function formatAddSummary(summary: AddIgnoreSummary, target: IgnoreTarget
 	return `${parts.join('. ')}.`;
 }
 
-export async function openIgnoreFile(resource: vscode.Uri | undefined, target: IgnoreTarget): Promise<void> {
+export async function openIgnoreFile(resource: vscode.Uri | undefined, target: IgnoreTarget, logger: Logger = noopLogger): Promise<void> {
 	const baseResource = await resolveResourceForRepo(resource);
 	if (!baseResource) {
+		logger.warn(`Open ${targetLabels[target]} failed: no workspace folder or selected resource`);
 		vscode.window.showErrorMessage('Open a workspace folder or file first.');
 		return;
 	}
 
-	const repoRoot = await resolveGitRoot(baseResource, true);
+	const repoRoot = await resolveGitRoot(baseResource, true, logger);
 	if (!repoRoot) {
 		return;
 	}
 
 	const ignoreFile = getIgnoreFileUri(repoRoot, target);
 	await ensureTextFile(ignoreFile);
+	logger.info(`Opened ignore file: ${ignoreFile.fsPath}`);
 
 	const document = await vscode.workspace.openTextDocument(ignoreFile);
 	await vscode.window.showTextDocument(document);
@@ -241,11 +257,15 @@ async function resolveResourceForRepo(resource: vscode.Uri | undefined): Promise
 	return undefined;
 }
 
-async function resolveGitRoot(resource: vscode.Uri, showError: boolean): Promise<string | undefined> {
+async function resolveGitRoot(resource: vscode.Uri, showError: boolean, logger: Logger): Promise<string | undefined> {
 	try {
 		const isDirectory = await isDirectoryResource(resource);
-		return await findGitRoot(getGitRootSearchPath(resource.fsPath, isDirectory));
-	} catch {
+		const searchPath = getGitRootSearchPath(resource.fsPath, isDirectory);
+		const repoRoot = await findGitRoot(searchPath);
+		logger.info(`Resolved Git root for ${resource.fsPath} -> ${repoRoot}`);
+		return repoRoot;
+	} catch (error) {
+		logger.warn(`Git root resolution failed for ${resource.fsPath}: ${getErrorMessage(error)}`);
 		if (showError) {
 			vscode.window.showErrorMessage('Selected resource is not inside a Git repository.');
 		}
@@ -274,6 +294,7 @@ async function findTrackedCandidates(candidates: readonly IgnoreCandidate[]): Pr
 async function filterTrackedCandidates(
 	candidates: readonly IgnoreCandidate[],
 	trackedCandidates: readonly IgnoreCandidate[],
+	logger: Logger,
 ): Promise<TrackedFilterResult | undefined> {
 	if (trackedCandidates.length === 0) {
 		return { candidates: [...candidates], skippedTracked: 0 };
@@ -287,6 +308,7 @@ async function filterTrackedCandidates(
 		'Skip Tracked',
 		'Cancel',
 	);
+	logger.info(`Tracked warning decision: ${choice ?? 'dismissed'}`);
 
 	if (choice === 'Cancel' || choice === undefined) {
 		return undefined;
@@ -306,6 +328,7 @@ async function filterTrackedCandidates(
 async function appendCandidates(
 	candidates: readonly IgnoreCandidate[],
 	target: IgnoreTarget,
+	logger: Logger,
 ): Promise<Omit<AddIgnoreSummary, 'skippedTracked' | 'failed' | 'targetCount'>> {
 	let added = 0;
 	let existing = 0;
@@ -313,9 +336,11 @@ async function appendCandidates(
 
 	for (const [repoRoot, repoCandidates] of candidatesByRepoRoot) {
 		const ignoreFile = getIgnoreFileUri(repoRoot, target);
+		logger.info(`Target ignore file: ${ignoreFile.fsPath}`);
 		const result = await appendPatternsIfMissing(ignoreFile, repoCandidates.map((candidate) => candidate.pattern));
 		added += result.added;
 		existing += result.existing;
+		logger.info(`Updated ignore file: added=${result.added} existing=${result.existing} file=${ignoreFile.fsPath}`);
 	}
 
 	return { added, existing };
@@ -333,8 +358,9 @@ function groupCandidatesByRepoRoot(candidates: readonly IgnoreCandidate[]): Map<
 	return candidatesByRepoRoot;
 }
 
-function showAddSummary(summary: AddIgnoreSummary, target: IgnoreTarget): void {
+function showAddSummary(summary: AddIgnoreSummary, target: IgnoreTarget, logger: Logger): void {
 	const message = formatAddSummary(summary, target);
+	logger.info(`Add complete: added=${summary.added} existing=${summary.existing} skippedTracked=${summary.skippedTracked} failed=${summary.failed} target=${targetLabels[target]}`);
 
 	if (summary.added === 0 && summary.failed > 0) {
 		vscode.window.showWarningMessage(message);
@@ -371,6 +397,10 @@ function getCandidateKey(candidate: IgnoreCandidate): string {
 
 function pluralize(count: number, singular: string): string {
 	return count === 1 ? singular : `${singular}s`;
+}
+
+function getErrorMessage(error: unknown): string {
+	return error instanceof Error ? error.message : String(error);
 }
 
 function getIgnoreFileUri(repoRoot: string, target: IgnoreTarget): vscode.Uri {
