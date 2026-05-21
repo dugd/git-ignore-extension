@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { registerExcludeWatcher } from './excludeWatcher';
-import { addResourceToIgnore, openIgnoreFile } from './gitIgnoreManager';
+import { addResourceToIgnore, explainIgnoredResource, openIgnoreFile } from './gitIgnoreManager';
 import { createOutputChannelLogger } from './logger';
 
 export function activate(context: vscode.ExtensionContext) {
@@ -28,6 +28,9 @@ export function activate(context: vscode.ExtensionContext) {
 		}),
 		vscode.commands.registerCommand('git-ignore-manager.openExclude', async (resource?: vscode.Uri) => {
 			await openIgnoreFile(resource, 'exclude', logger);
+		}),
+		vscode.commands.registerCommand('git-ignore-manager.whyIgnored', async (resource?: vscode.Uri) => {
+			await explainIgnoredResource(resource, logger);
 		}),
 	);
 }

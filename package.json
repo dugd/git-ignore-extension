@@ -15,7 +15,8 @@
     "onCommand:git-ignore-manager.addToGitignore",
     "onCommand:git-ignore-manager.addToExclude",
     "onCommand:git-ignore-manager.openGitignore",
-    "onCommand:git-ignore-manager.openExclude"
+    "onCommand:git-ignore-manager.openExclude",
+    "onCommand:git-ignore-manager.whyIgnored"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -39,6 +40,11 @@
         "command": "git-ignore-manager.openExclude",
         "title": "Open .git/info/exclude",
         "category": "Git Ignore Manager"
+      },
+      {
+        "command": "git-ignore-manager.whyIgnored",
+        "title": "Why Is This Ignored?",
+        "category": "Git Ignore Manager"
       }
     ],
     "menus": {
@@ -50,6 +56,10 @@
         {
           "command": "git-ignore-manager.addToExclude",
           "group": "git-ignore-manager@2"
+        },
+        {
+          "command": "git-ignore-manager.whyIgnored",
+          "group": "git-ignore-manager@3"
         }
       ],
       "commandPalette": [
@@ -64,6 +74,9 @@
         },
         {
           "command": "git-ignore-manager.openExclude"
+        },
+        {
+          "command": "git-ignore-manager.whyIgnored"
         }
       ]
     }

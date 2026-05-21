@@ -1,10 +1,10 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { findGitRoot, hasTrackedFilesInDirectory, isTrackedByGit } from './git';
+import { checkIgnore, findGitRoot, hasTrackedFilesInDirectory, isTrackedByGit } from './git';
 import { appendPatternsIfMissing, ensureTextFile } from './ignoreFile';
 import type { Logger } from './logger';
 import { noopLogger } from './logger';
-import { createIgnorePattern, getGitRootSearchPath } from './pathUtils';
+import { createIgnorePattern, getGitRootSearchPath, normalizePathSeparators } from './pathUtils';
 
 type IgnoreTarget = 'gitignore' | 'exclude';
 
@@ -208,6 +208,41 @@ export async function openIgnoreFile(resource: vscode.Uri | undefined, target: I
 	await vscode.window.showTextDocument(document);
 }
 
+export async function explainIgnoredResource(resource: vscode.Uri | undefined, logger: Logger = noopLogger): Promise<void> {
+	logger.info('Why Is This Ignored? started');
+	const selectedResource = await resolveSelectedResource(resource);
+	if (!selectedResource) {
+		logger.warn('Explain ignored command failed: no selected resource');
+		vscode.window.showErrorMessage('Select a file or folder to inspect.');
+		return;
+	}
+
+	const repoRoot = await resolveGitRoot(selectedResource, true, logger);
+	if (!repoRoot) {
+		return;
+	}
+
+	const repoRelativePath = createRepoRelativePath(repoRoot, selectedResource.fsPath);
+	logger.info(`Checking ignore explanation for: ${repoRelativePath}`);
+
+	try {
+		const explanation = await checkIgnore(repoRoot, repoRelativePath);
+		if (!explanation) {
+			logger.info(`Not ignored: ${repoRelativePath}`);
+			vscode.window.showInformationMessage(`"${repoRelativePath}" is not ignored by Git.`);
+			return;
+		}
+
+		logger.info(`Ignored by ${explanation.source}:${explanation.line} pattern="${explanation.pattern}" path="${explanation.path}"`);
+		vscode.window.showInformationMessage(
+			`Ignored by ${explanation.source}:${explanation.line} using pattern "${explanation.pattern}".`,
+		);
+	} catch (error) {
+		logger.error(`Failed to explain ignore status for ${repoRelativePath}: ${getErrorMessage(error)}`);
+		vscode.window.showErrorMessage('Failed to check Git ignore status. See Git Ignore Manager output for details.');
+	}
+}
+
 async function resolveSelectedResources(
 	resource: vscode.Uri | undefined,
 	selectedResources: readonly vscode.Uri[] | undefined,
@@ -401,6 +436,10 @@ function pluralize(count: number, singular: string): string {
 
 function getErrorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
+}
+
+function createRepoRelativePath(repoRoot: string, resourcePath: string): string {
+	return normalizePathSeparators(path.relative(repoRoot, resourcePath));
 }
 
 function getIgnoreFileUri(repoRoot: string, target: IgnoreTarget): vscode.Uri {
