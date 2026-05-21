@@ -1,6 +1,10 @@
 import * as assert from 'assert';
+import { mkdtemp, rm } from 'node:fs/promises';
+import * as os from 'node:os';
 import * as path from 'node:path';
-import { createTrackedWarningMessage } from '../gitIgnoreManager';
+import * as vscode from 'vscode';
+import { createBatchTrackedWarningMessage, createTrackedWarningMessage, formatAddSummary } from '../gitIgnoreManager';
+import { appendPatternsIfMissing } from '../ignoreFile';
 import { createIgnorePattern, normalizePathSeparators } from '../pathUtils';
 
 suite('Path utilities', () => {
@@ -35,6 +39,51 @@ suite('Tracked warnings', () => {
 		assert.strictEqual(
 			createTrackedWarningMessage('tmp/cache/', true),
 			'"tmp/cache/" contains files already tracked by Git. Ignoring this folder will not stop Git from tracking those files.',
+		);
+	});
+
+	test('describes tracked batch resources', () => {
+		assert.strictEqual(
+			createBatchTrackedWarningMessage(2, 5),
+			'2 of 5 selected resources are already tracked by Git or contain tracked files. Ignoring them will not stop Git from tracking those files.',
+		);
+	});
+});
+
+suite('Ignore file writes', () => {
+	test('appends missing patterns once and reports existing patterns', async () => {
+		const tempDirectory = await mkdtemp(path.join(os.tmpdir(), 'git-ignore-manager-'));
+		const ignoreFile = vscode.Uri.file(path.join(tempDirectory, '.gitignore'));
+
+		try {
+			let result = await appendPatternsIfMissing(ignoreFile, ['dist/', 'out/', 'dist/']);
+
+			assert.deepStrictEqual(result, { added: 2, existing: 1 });
+
+			result = await appendPatternsIfMissing(ignoreFile, ['dist/', 'coverage/']);
+
+			assert.deepStrictEqual(result, { added: 1, existing: 1 });
+
+			const content = Buffer.from(await vscode.workspace.fs.readFile(ignoreFile)).toString('utf8');
+			assert.strictEqual(content, 'dist/\nout/\ncoverage/\n');
+		} finally {
+			await rm(tempDirectory, { recursive: true, force: true });
+		}
+	});
+});
+
+suite('Add summaries', () => {
+	test('formats mixed batch results', () => {
+		assert.strictEqual(
+			formatAddSummary({ added: 3, existing: 2, skippedTracked: 1, failed: 1, targetCount: 7 }, 'exclude'),
+			'Added 3 patterns to .git/info/exclude. 2 already existed. 1 skipped because it is tracked. 1 failed.',
+		);
+	});
+
+	test('formats empty batch results', () => {
+		assert.strictEqual(
+			formatAddSummary({ added: 0, existing: 0, skippedTracked: 0, failed: 0, targetCount: 0 }, 'gitignore'),
+			'No patterns were added to .gitignore.',
 		);
 	});
 });
