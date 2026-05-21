@@ -1,11 +1,16 @@
 import * as assert from 'assert';
+import { execFile } from 'node:child_process';
 import { mkdtemp, rm } from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { promisify } from 'node:util';
 import * as vscode from 'vscode';
+import { findGitRoot } from '../git';
 import { createBatchTrackedWarningMessage, createTrackedWarningMessage, formatAddSummary } from '../gitIgnoreManager';
 import { appendPatternsIfMissing } from '../ignoreFile';
-import { createIgnorePattern, normalizePathSeparators } from '../pathUtils';
+import { createIgnorePattern, getGitRootSearchPath, normalizePathSeparators } from '../pathUtils';
+
+const execFileAsync = promisify(execFile);
 
 suite('Path utilities', () => {
 	test('creates repository-relative file patterns', () => {
@@ -24,6 +29,39 @@ suite('Path utilities', () => {
 
 	test('normalizes Windows separators', () => {
 		assert.strictEqual(normalizePathSeparators('src\\config\\local.json'), 'src/config/local.json');
+	});
+
+	test('starts Git root lookup from the selected folder instead of the workspace root', () => {
+		const resourcePath = path.join('workspace', 'outer-repo', 'nested-repo');
+
+		assert.strictEqual(getGitRootSearchPath(resourcePath, true), resourcePath);
+	});
+
+	test('starts Git root lookup from the selected file parent folder', () => {
+		const resourcePath = path.join('workspace', 'outer-repo', 'nested-repo', 'src', 'config.local.json');
+
+		assert.strictEqual(getGitRootSearchPath(resourcePath, false), path.dirname(resourcePath));
+	});
+});
+
+suite('Git root resolution', () => {
+	test('resolves the inner Git repository for a file inside a nested repository', async () => {
+		const tempDirectory = await mkdtemp(path.join(os.tmpdir(), 'git-ignore-manager-'));
+		const outerRepo = path.join(tempDirectory, 'outer-repo');
+		const innerRepo = path.join(outerRepo, 'nested-repo');
+		const innerFile = path.join(innerRepo, 'src', 'config.local.json');
+
+		try {
+			await vscode.workspace.fs.createDirectory(vscode.Uri.file(path.dirname(innerFile)));
+			await execFileAsync('git', ['init', outerRepo]);
+			await execFileAsync('git', ['init', innerRepo]);
+
+			const searchPath = getGitRootSearchPath(innerFile, false);
+
+			assert.strictEqual(await findGitRoot(searchPath), innerRepo);
+		} finally {
+			await rm(tempDirectory, { recursive: true, force: true });
+		}
 	});
 });
 

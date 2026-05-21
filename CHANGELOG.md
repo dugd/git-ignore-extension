@@ -25,3 +25,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Updated README to describe the current MVP scope.
 - Added explicit Node.js and VS Code ambient types to the TypeScript configuration.
 - Improved tracked-file warnings for folders that contain tracked files.
+- Resolved Git roots from selected resources instead of workspace roots to support nested repositories.

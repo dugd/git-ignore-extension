@@ -2,7 +2,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { findGitRoot, hasTrackedFilesInDirectory, isTrackedByGit } from './git';
 import { appendPatternsIfMissing, ensureTextFile } from './ignoreFile';
-import { createIgnorePattern } from './pathUtils';
+import { createIgnorePattern, getGitRootSearchPath } from './pathUtils';
 
 type IgnoreTarget = 'gitignore' | 'exclude';
 
@@ -242,17 +242,24 @@ async function resolveResourceForRepo(resource: vscode.Uri | undefined): Promise
 }
 
 async function resolveGitRoot(resource: vscode.Uri, showError: boolean): Promise<string | undefined> {
-	const workspaceFolder = vscode.workspace.getWorkspaceFolder(resource);
-	const cwd = workspaceFolder?.uri.fsPath ?? path.dirname(resource.fsPath);
-
 	try {
-		return await findGitRoot(cwd);
+		const isDirectory = await isDirectoryResource(resource);
+		return await findGitRoot(getGitRootSearchPath(resource.fsPath, isDirectory));
 	} catch {
 		if (showError) {
 			vscode.window.showErrorMessage('Selected resource is not inside a Git repository.');
 		}
 
 		return undefined;
+	}
+}
+
+async function isDirectoryResource(resource: vscode.Uri): Promise<boolean> {
+	try {
+		const stat = await vscode.workspace.fs.stat(resource);
+		return stat.type === vscode.FileType.Directory;
+	} catch {
+		return false;
 	}
 }
 

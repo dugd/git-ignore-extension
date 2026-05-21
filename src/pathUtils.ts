@@ -14,3 +14,7 @@ export function createIgnorePattern(repoRoot: string, resourcePath: string, isDi
 export function normalizePathSeparators(value: string): string {
 	return value.replace(/\\/g, '/');
 }
+
+export function getGitRootSearchPath(resourcePath: string, isDirectory: boolean): string {
+	return isDirectory ? resourcePath : path.dirname(resourcePath);
+}
