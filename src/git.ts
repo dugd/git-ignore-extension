@@ -29,6 +29,17 @@ export async function hasTrackedFilesInDirectory(repoRoot: string, repoRelativeD
 	return stdout.trim().length > 0;
 }
 
+export async function untrackFromGit(repoRoot: string, repoRelativePath: string, isDirectory: boolean): Promise<void> {
+	const args = ['-C', repoRoot, 'rm', '--cached'];
+
+	if (isDirectory) {
+		args.push('-r');
+	}
+
+	args.push('--', repoRelativePath);
+	await execFileAsync('git', args);
+}
+
 export async function checkIgnore(repoRoot: string, repoRelativePath: string): Promise<IgnoreExplanation | undefined> {
 	try {
 		const { stdout } = await execFileAsync('git', ['-C', repoRoot, 'check-ignore', '-v', '--', repoRelativePath]);

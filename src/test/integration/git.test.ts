@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { checkIgnore, findGitRoot, hasTrackedFilesInDirectory, isTrackedByGit } from '../../git';
+import { checkIgnore, findGitRoot, hasTrackedFilesInDirectory, isTrackedByGit, untrackFromGit } from '../../git';
 import { getGitRootSearchPath } from '../../pathUtils';
 import { createTempGitRepo, createTempGitRepoHandle } from '../helpers/tempGitRepo';
 
@@ -57,6 +57,38 @@ suite('git integration', () => {
 
 			assert.strictEqual(await hasTrackedFilesInDirectory(repo.root, 'src/'), true);
 			assert.strictEqual(await hasTrackedFilesInDirectory(repo.root, 'tmp/'), false);
+		} finally {
+			await repo.cleanup();
+		}
+	});
+
+	test('untracks files without deleting them from disk', async () => {
+		const repo = await createTempGitRepo();
+
+		try {
+			await repo.writeFile('tracked.txt', 'content');
+			await repo.git(['add', 'tracked.txt']);
+
+			await untrackFromGit(repo.root, 'tracked.txt', false);
+
+			assert.strictEqual(await isTrackedByGit(repo.root, 'tracked.txt'), false);
+			assert.strictEqual(await repo.readFile('tracked.txt'), 'content');
+		} finally {
+			await repo.cleanup();
+		}
+	});
+
+	test('untracks directories recursively without deleting files from disk', async () => {
+		const repo = await createTempGitRepo();
+
+		try {
+			await repo.writeFile('src/tracked.txt', 'content');
+			await repo.git(['add', 'src/tracked.txt']);
+
+			await untrackFromGit(repo.root, 'src/', true);
+
+			assert.strictEqual(await hasTrackedFilesInDirectory(repo.root, 'src/'), false);
+			assert.strictEqual(await repo.readFile('src/tracked.txt'), 'content');
 		} finally {
 			await repo.cleanup();
 		}

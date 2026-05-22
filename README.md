@@ -23,7 +23,7 @@ The add and explanation commands are also available from the Explorer context me
 - Uses forward slashes across platforms.
 - Adds trailing `/` for folders.
 - Prevents duplicate exact patterns.
-- Warns before adding already tracked files.
+- Warns before adding already tracked files and can untrack them with explicit confirmation.
 - Supports basic multi-root workspaces by resolving the Git repository for the selected resource.
 - Explains ignored files using Git's native `git check-ignore -v` output.
 
@@ -32,4 +32,3 @@ The add and explanation commands are also available from the Explorer context me
 - Global Git ignore support.
 - Custom pattern input.
 - Remove ignore pattern workflow.
-- `git rm --cached` guided action.

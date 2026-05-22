@@ -21,6 +21,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Added a logger adapter backed by a VS Code output channel for command and watcher diagnostics.
 - Added split unit and integration tests for path handling, ignore file writes, Git helpers, and add-ignore workflows.
 - Added `Why Is This Ignored?` command backed by `git check-ignore -v`.
+- Added `Untrack and Ignore` action for tracked files and folders.
 
 ### Changed
 

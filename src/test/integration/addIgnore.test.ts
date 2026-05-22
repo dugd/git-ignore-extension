@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { addResourceToIgnore } from '../../gitIgnoreManager';
 import { noopLogger } from '../../logger';
+import type { UserPrompts } from '../../userPrompts';
 import { createTempGitRepo, createTempGitRepoHandle } from '../helpers/tempGitRepo';
 
 suite('add ignore integration', () => {
@@ -132,4 +133,98 @@ suite('add ignore integration', () => {
 			await outer.cleanup();
 		}
 	});
+
+	test('untrack and ignore removes a tracked file from the index without deleting it', async () => {
+		const repo = await createTempGitRepo();
+		const prompts = createTestPrompts('Untrack and Ignore');
+
+		try {
+			const file = await repo.writeFile('tracked.local', 'content');
+			await repo.git(['add', 'tracked.local']);
+
+			await addResourceToIgnore(file, undefined, 'gitignore', noopLogger, prompts);
+
+			assert.strictEqual(await repo.readFile('.gitignore'), 'tracked.local\n');
+			assert.strictEqual(await repo.readFile('tracked.local'), 'content');
+			assert.strictEqual((await repo.git(['ls-files', '--', 'tracked.local'])), '');
+			assert.deepStrictEqual(prompts.informationMessages, [
+				'Added "tracked.local" to .gitignore and untracked it from Git.',
+			]);
+		} finally {
+			await repo.cleanup();
+		}
+	});
+
+	test('untrack and ignore removes tracked folder contents from the index without deleting files', async () => {
+		const repo = await createTempGitRepo();
+		const prompts = createTestPrompts('Untrack and Ignore');
+
+		try {
+			const folder = await repo.mkdir('tracked-folder');
+			await repo.writeFile('tracked-folder/file.txt', 'content');
+			await repo.git(['add', 'tracked-folder/file.txt']);
+
+			await addResourceToIgnore(folder, undefined, 'gitignore', noopLogger, prompts);
+
+			assert.strictEqual(await repo.readFile('.gitignore'), 'tracked-folder/\n');
+			assert.strictEqual(await repo.readFile('tracked-folder/file.txt'), 'content');
+			assert.strictEqual((await repo.git(['ls-files', '--', 'tracked-folder/file.txt'])), '');
+			assert.deepStrictEqual(prompts.informationMessages, [
+				'Added "tracked-folder/" to .gitignore and untracked it from Git.',
+			]);
+		} finally {
+			await repo.cleanup();
+		}
+	});
+
+	test('batch untrack and ignore untracks tracked selections and adds all patterns', async () => {
+		const repo = await createTempGitRepo();
+		const prompts = createTestPrompts('Untrack and Ignore');
+
+		try {
+			const trackedFile = await repo.writeFile('tracked.local', 'tracked');
+			const untrackedFile = await repo.writeFile('untracked.local', 'untracked');
+			await repo.git(['add', 'tracked.local']);
+
+			await addResourceToIgnore(trackedFile, [trackedFile, untrackedFile], 'gitignore', noopLogger, prompts);
+
+			assert.strictEqual(await repo.readFile('.gitignore'), 'tracked.local\nuntracked.local\n');
+			assert.strictEqual(await repo.readFile('tracked.local'), 'tracked');
+			assert.strictEqual(await repo.readFile('untracked.local'), 'untracked');
+			assert.strictEqual((await repo.git(['ls-files', '--', 'tracked.local'])), '');
+			assert.deepStrictEqual(prompts.informationMessages, [
+				'Added 2 patterns to .gitignore. 1 untracked from Git.',
+			]);
+		} finally {
+			await repo.cleanup();
+		}
+	});
 });
+
+interface TestPrompts extends UserPrompts {
+	informationMessages: string[];
+	warningMessages: string[];
+	errorMessages: string[];
+}
+
+function createTestPrompts(warningChoice: string | undefined): TestPrompts {
+	const prompts: TestPrompts = {
+		informationMessages: [],
+		warningMessages: [],
+		errorMessages: [],
+		showInformationMessage: async (message) => {
+			prompts.informationMessages.push(message);
+			return undefined;
+		},
+		showWarningMessage: async (message) => {
+			prompts.warningMessages.push(message);
+			return warningChoice;
+		},
+		showErrorMessage: async (message) => {
+			prompts.errorMessages.push(message);
+			return undefined;
+		},
+	};
+
+	return prompts;
+}
