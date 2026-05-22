@@ -1,5 +1,11 @@
 import * as assert from 'assert';
-import { createBatchTrackedWarningMessage, createTrackedWarningMessage, formatAddSummary } from '../../gitIgnoreManager';
+import {
+	createBatchTrackedWarningMessage,
+	createTrackedWarningMessage,
+	formatAddSummary,
+	formatIgnoreExplanationMessage,
+	getIgnoreSourcePath,
+} from '../../gitIgnoreManager';
 
 suite('messages', () => {
 	test('describes tracked files', () => {
@@ -63,5 +69,25 @@ suite('messages', () => {
 			formatAddSummary({ added: 0, existing: 0, skippedTracked: 0, failed: 0, targetCount: 0 }, 'gitignore'),
 			'No patterns were added to .gitignore.',
 		);
+	});
+
+	test('formats effective ignore rule explanations', () => {
+		assert.strictEqual(
+			formatIgnoreExplanationMessage({
+				source: 'src/.gitignore',
+				line: 7,
+				pattern: '*.local.json',
+				path: 'src/config.local.json',
+			}),
+			'Ignored by src/.gitignore:7 using pattern "*.local.json".',
+		);
+	});
+
+	test('resolves repository-relative ignore sources', () => {
+		assert.strictEqual(getIgnoreSourcePath('/repo', 'src/.gitignore'), '/repo/src/.gitignore');
+	});
+
+	test('keeps absolute ignore sources unchanged', () => {
+		assert.strictEqual(getIgnoreSourcePath('/repo', '/home/user/.gitignore_global'), '/home/user/.gitignore_global');
 	});
 });

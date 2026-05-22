@@ -1,5 +1,6 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
+import type { IgnoreExplanation } from './git';
 import { checkIgnore, findGitRoot, hasTrackedFilesInDirectory, isTrackedByGit } from './git';
 import { appendPatternsIfMissing, ensureTextFile } from './ignoreFile';
 import type { Logger } from './logger';
@@ -7,6 +8,7 @@ import { noopLogger } from './logger';
 import { createIgnorePattern, getGitRootSearchPath, normalizePathSeparators } from './pathUtils';
 
 type IgnoreTarget = 'gitignore' | 'exclude';
+const openRuleAction = 'Open Rule';
 
 interface IgnoreCandidate {
 	repoRoot: string;
@@ -234,9 +236,11 @@ export async function explainIgnoredResource(resource: vscode.Uri | undefined, l
 		}
 
 		logger.info(`Ignored by ${explanation.source}:${explanation.line} pattern="${explanation.pattern}" path="${explanation.path}"`);
-		vscode.window.showInformationMessage(
-			`Ignored by ${explanation.source}:${explanation.line} using pattern "${explanation.pattern}".`,
-		);
+		const choice = await vscode.window.showInformationMessage(formatIgnoreExplanationMessage(explanation), openRuleAction);
+
+		if (choice === openRuleAction) {
+			await openIgnoreRule(repoRoot, explanation.source, explanation.line, logger);
+		}
 	} catch (error) {
 		logger.error(`Failed to explain ignore status for ${repoRelativePath}: ${getErrorMessage(error)}`);
 		vscode.window.showErrorMessage('Failed to check Git ignore status. See Git Ignore Manager output for details.');
@@ -440,6 +444,29 @@ function getErrorMessage(error: unknown): string {
 
 function createRepoRelativePath(repoRoot: string, resourcePath: string): string {
 	return normalizePathSeparators(path.relative(repoRoot, resourcePath));
+}
+
+export function formatIgnoreExplanationMessage(explanation: IgnoreExplanation): string {
+	return `Ignored by ${explanation.source}:${explanation.line} using pattern "${explanation.pattern}".`;
+}
+
+async function openIgnoreRule(repoRoot: string, source: string, line: number, logger: Logger): Promise<void> {
+	const sourceUri = vscode.Uri.file(getIgnoreSourcePath(repoRoot, source));
+	const document = await vscode.workspace.openTextDocument(sourceUri);
+	const editor = await vscode.window.showTextDocument(document);
+	const position = new vscode.Position(Math.max(line - 1, 0), 0);
+
+	editor.selection = new vscode.Selection(position, position);
+	editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
+	logger.info(`Opened ignore rule: ${sourceUri.fsPath}:${line}`);
+}
+
+export function getIgnoreSourcePath(repoRoot: string, source: string): string {
+	if (path.isAbsolute(source)) {
+		return source;
+	}
+
+	return path.join(repoRoot, source);
 }
 
 function getIgnoreFileUri(repoRoot: string, target: IgnoreTarget): vscode.Uri {
