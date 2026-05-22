@@ -4,7 +4,7 @@ All notable changes to the "Git Ignore Manager" extension will be documented in 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.1.0] - 2026-05-22
 
 ### Added
 
@@ -26,7 +26,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 
 - Replaced the generated `Hello World` extension scaffold with the initial Git Ignore Manager structure.
-- Updated README to describe the current MVP scope.
+- Updated README for Marketplace publishing.
 - Added explicit Node.js and VS Code ambient types to the TypeScript configuration.
 - Improved tracked-file warnings for folders that contain tracked files.
 - Resolved Git roots from selected resources instead of workspace roots to support nested repositories.

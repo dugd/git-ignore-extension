@@ -1,6 +1,8 @@
 .vscode/**
 .vscode-test/**
 src/**
+out/test/**
+pnpm-lock.yaml
 .gitignore
 .yarnrc
 **/tsconfig.json

@@ -1,8 +1,25 @@
 {
   "name": "git-ignore-manager",
   "displayName": "Git Ignore Manager",
-  "description": "Improved management of .gitignore, .git/info/exclude, and global Git ignore rules.",
-  "version": "0.0.1",
+  "description": "Manage .gitignore and .git/info/exclude rules from VS Code.",
+  "version": "0.1.0",
+  "publisher": "dugd",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dugd/git-ignore-extension.git"
+  },
+  "bugs": {
+    "url": "https://github.com/dugd/git-ignore-extension/issues"
+  },
+  "homepage": "https://github.com/dugd/git-ignore-extension#readme",
+  "keywords": [
+    "git",
+    "gitignore",
+    "exclude",
+    "source-control",
+    "vscode"
+  ],
   "engines": {
     "vscode": "^1.120.0"
   },
